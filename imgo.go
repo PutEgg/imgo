@@ -7,9 +7,12 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
+	"fmt"
+	"strconv"
 )
 
 const defaultCompareAccuracy = 10 //查找图片的精确值，默认查找图片平均有10分之一的像素对应即认为两部分图片一样。
+const colorRange = 20000	//设置四个点颜色容差范围，解决视频压缩导致颜色误差问题
 
 type Picture struct {
 	Img             image.Image
@@ -124,16 +127,25 @@ func newPic(img image.Image, path string) *Picture {
 }
 
 func scanAreaOk(intX, intY int, p, searchPic *Picture) bool {
+	//fmt.Println("Found")
 	h := searchPic.Height - 1
 	w := searchPic.Width - 1
 
 	if p.CompareAccuracy < 1 || h < p.CompareAccuracy || w < p.CompareAccuracy {
 		p.SetCompareAccuracy(1)
 	}
-
+	
+	
+	
 	for y := 0; y <= h; y += p.CompareAccuracy {
 		for x := 0; x <= w; x += p.CompareAccuracy {
-			if searchPic.Img.At(x, y) != p.Img.At(intX+x, intY+y) {
+			
+			var target_1_R,target_1_G,target_1_B = getRGB(p,intX+x,intY+y)
+			var search_1_R,search_1_G,search_1_B = getRGB(searchPic,x,y)
+		
+			if (target_1_R-colorRange >= search_1_R || search_1_R >= target_1_R+colorRange) ||
+				(target_1_G-colorRange >= search_1_G || search_1_G >= target_1_G+colorRange) ||
+				(target_1_B-colorRange >= search_1_B || search_1_B >= target_1_B+colorRange) {
 				return false
 			}
 		}
@@ -141,24 +153,80 @@ func scanAreaOk(intX, intY int, p, searchPic *Picture) bool {
 	return true
 }
 
+
+func getRGB(pp *Picture,x int,y int)(int,int,int){
+	var a,b,c,d = pp.Img.At(x, y).RGBA()
+	var sa = fmt.Sprint(a)
+	var sb = fmt.Sprint(b)
+	var sc = fmt.Sprint(c)
+	var sd = fmt.Sprint(d)
+	_ = sd
+	var ia,err1 = strconv.Atoi(sa)
+	var ib,err2 = strconv.Atoi(sb)
+	var ic,err3 = strconv.Atoi(sc)
+	if err1 != nil {
+		panic(err1)
+	}
+	if err2 != nil {
+		panic(err1)
+	}
+	if err3 != nil {
+		panic(err1)
+	}
+	return ia,ib,ic
+}
+
+
+
 func seekPos(p *Picture, searchPic *Picture, searchOnce bool) []image.Rectangle {
 	var rectangles []image.Rectangle
 	if searchPic.Width > p.Width || searchPic.Height > p.Height {
 		return rectangles
 	}
+	
+	var search_1_R,search_1_G,search_1_B = getRGB(searchPic,0,0)
+	var search_2_R,search_2_G,search_2_B = getRGB(searchPic,searchPic.Width-1,searchPic.Height-1)
+	var search_3_R,search_3_G,search_3_B = getRGB(searchPic,searchPic.Width-1,0)
+	var search_4_R,search_4_G,search_4_B = getRGB(searchPic,0,searchPic.Height-1)
+	
 	for y := 0; y <= (p.Height - searchPic.Height); y++ {
 		for x := 0; x <= (p.Width - searchPic.Width); x++ {
-			if searchPic.Img.At(0, 0) != p.Img.At(x, y) ||
-				searchPic.Img.At(searchPic.Width-1, 0) != p.Img.At(x+searchPic.Width-1, y) ||
-				searchPic.Img.At(searchPic.Width-1, searchPic.Height-1) != p.Img.At(x+searchPic.Width-1, y+searchPic.Height-1) ||
-				searchPic.Img.At(0, searchPic.Height-1) != p.Img.At(x, y+searchPic.Height-1) { //四个角只要有一个颜色对应不上直接跳到下一次
+		
+		
+			//第一组
+			
+			var target_1_R,target_1_G,target_1_B = getRGB(p,x,y)
+		
+			//第二组
+			
+			var target_2_R,target_2_G,target_2_B = getRGB(p,x+searchPic.Width-1,y)
+		
+			//第三组
+			
+			var target_3_R,target_3_G,target_3_B = getRGB(p,x+searchPic.Width-1,y+searchPic.Height-1)
+		
+			//第四组
+			
+			var target_4_R,target_4_G,target_4_B = getRGB(p,x,y+searchPic.Height-1)
+			
+
+
+			
+			if ((target_1_R-colorRange <= search_1_R && search_1_R <= target_1_R+colorRange) && (target_1_G-colorRange <= search_1_G && search_1_G <= target_1_G+colorRange) && (target_1_B-colorRange <= search_1_B && search_1_B <= target_1_B+colorRange)) &&
+				((target_2_R-colorRange <= search_2_R && search_2_R <= target_2_R+colorRange) && (target_2_G-colorRange <= search_2_G && search_2_G <= target_2_G+colorRange) && (target_2_B-colorRange <= search_2_B && search_2_B <= target_2_B+colorRange)) &&
+				((target_3_R-colorRange <= search_3_R && search_3_R <= target_3_R+colorRange) && (target_3_G-colorRange <= search_3_G && search_3_G <= target_3_G+colorRange) && (target_3_B-colorRange <= search_3_B && search_3_B <= target_3_B+colorRange)) &&
+				((target_4_R-colorRange <= search_4_R && search_4_R <= target_4_R+colorRange) && (target_4_G-colorRange <= search_4_G && search_4_G <= target_4_G+colorRange) && (target_4_B-colorRange <= search_4_B && search_4_B <= target_4_B+colorRange)) { //四个角都在colorRange颜色范围内才继续下一步
+				
+				
+			}else{
+				
 				continue
 			}
 
 			if !scanAreaOk(x, y, p, searchPic) { //四个角对上了在扫描区域，不成功直接下一次，
+				
 				continue
 			}
-
 			min := image.Point{X: x, Y: y}
 			max := image.Point{X: x + searchPic.Width, Y: y + searchPic.Height}
 			rectangles = append(rectangles, image.Rectangle{Min: min, Max: max})
